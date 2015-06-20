@@ -1,0 +1,134 @@
+---
+title: "Human Activity Recognition Unilateral Dumbbell Biceps Curl"
+author: "Derek Corcoran"
+date: "Monday, June 15, 2015"
+output: pdf_document
+---
+
+# **Human Activity Recognition Unilateral Dumbbell Biceps Curl**
+
+### Summary
+
+The objective of this project is to predict weather a Dumbbell Biceps Curl was properly executed. In order to do that, a machine learning algorithm will be used to predict when the exercise  was properly done (*Class A*), or if they made a mistake (*Class B to E*), our Data set consists of the information given by sensors attached to the body and/or dumbbell while the exercise  was done, and it was classified by a human (Personal Trainer).
+
+### Data manipulation and training
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+library(ggplot2)
+library(caret)
+```
+
+The first thing we do is to load the training data and divide it. Usually 60% of it would be used as a training set, and 40% as a test set, but since this is a test, we will use 15% as training and 85% as testing for the validation of the dataset. 
+
+```{r, cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+library(caret)
+pml.training <- read.csv("~/Coursera/specialization R data/Machine Learning/Week3/pml-training.csv")
+pml.testing <- read.csv("~/Coursera/specialization R data/Machine Learning/Week3/pml-testing.csv")
+set.seed(7)
+#create datapartition 60% Training 40 % test
+inTrain = createDataPartition(pml.training$classe, p = 0.15,list=FALSE)
+training = pml.training[inTrain,]
+testing = pml.training[-inTrain,]
+result.train<-training$classe
+result.test<-testing$classe
+```
+
+The full dataset had `r length(pml.training$classe)` observation, of which `r length (training$classe)` was use to train the model and `r length (testing$classe)` was used to test the model, also we have a dataset of `r length(pml.testing[,1])` to which we don't know the answer to, which will be used later for further tests.
+
+We start with `r length(training[,-160])`, but we remove timestamps and we also preprocess the data by removing the near zero variable ones, and also remove all the columns with more than 50% NA. *I will keep the username as a variable, but I will transform it into a dummy variable.* 
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#dummies<-dummyVars(classe~user_name,data=training)
+#dummy.var.training<-predict(dummies, newdata=training)
+#dummy.var.testing<-predict(dummies,newdata=testing)
+#dummy.var.quiz<-predict(dummies, newdata=pml.testing)
+
+#remove variables with near zero variability
+
+nsv<-nearZeroVar(training[,-160], saveMetrics=TRUE)
+predictors.train<-training[,-160]
+predictors.test<- testing[,-160]
+
+predictors.train<-predictors.train[nsv$nzv==FALSE]
+predictors.test<-predictors.test[nsv$nzv==FALSE]
+pml.testing <- pml.testing[nsv$nzv==FALSE]
+
+predictors.train<-predictors.train[,-1]
+predictors.test<-predictors.test[,-1]
+pml.testing <- pml.testing[,-1]
+#remove timestamps and user names (will be replaced by dummy variables for usernames)
+
+predictors.train<-predictors.train[,-(1:4)]
+predictors.test<-predictors.test[,-(1:4)]
+pml.testing <- pml.testing[,-(1:4)]
+#dummies<-dummyVars(classe~user_name,data=training)
+#dummy.var.training<-predict(dummies, newdata=training)
+#dummy.var.testing<-predict(dummies,newdata=testing)
+#dummy.var.quiz<-predict(dummies, newdata=pml.testing)
+#predictors.train<-cbind(predictors.train,dummy.var.training)
+#predictors.test<-cbind(predictors.test,dummy.var.testing)
+#pml.testing<-cbind(pml.testing, dummy.var.quiz)
+
+#remove the columns with more than 50% of NA
+predictors.train<-predictors.train[,colSums(is.na(predictors.train))<nrow(predictors.train)*0.5]
+predictors.test<-predictors.test[,colSums(is.na(predictors.train))<nrow(predictors.train)*0.5]
+pml.testing<-pml.testing[,colSums(is.na(predictors.train))<nrow(predictors.train)*0.5]
+
+training<-cbind(result.train, predictors.train)
+testing<-cbind(result.test, predictors.test)
+```
+
+The number of variables ends up being `r length(predictors.train)`.
+
+Lets explore the Variables
+
+
+```{r, cache=TRUE, echo=FALSE}
+pairs(training[,2:12],pch = 21, bg = c(1:5)[unclass(training[,1])])
+pairs(training[,13:23],pch = 21, bg = c(1:5)[unclass(training[,1])])
+pairs(training[,24:34],pch = 21, bg = c(1:5)[unclass(training[,1])])
+summary(training)
+```
+
+```{r, cache=TRUE, echo=FALSE}
+pairs(training[,1:40],pch = 21, bg = c(1:5)[unclass(training[,1])])
+```
+
+# model
+
+now lets build the model
+
+```{r,echo=FALSE,cache=TRUE}
+colnames(training)[1] <- "classe"
+
+modelFit<-train(classe ~.,data=training)
+```
+
+
+Then lets check the model
+
+```{r}
+modelFit
+modelFit$finalModel
+```
+
+```{r}
+colnames(testing)[1] <- "classe"
+predictions <- predict(modelFit,newdata=testing)
+confusionMatrix(predictions, testing[,1])
+```
+
+```{r}
+predictions.final <- predict(modelFit,newdata=pml.testing)
+predictions.final
+length(predictions.final)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(predictions.final)
+```
