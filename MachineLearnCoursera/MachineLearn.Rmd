@@ -9,7 +9,7 @@ output: pdf_document
 
 ### Summary
 
-The objective of this project is to predict weather a Dumbbell Biceps Curl was properly executed. In order to do that, a machine learning algorithm will be used to predict when the exercise  was properly done (*Class A*), or if they made a mistake (*Class B to E*), our Data set consists of the information given by sensors attached to the body and/or dumbbell while the exercise  was done, and it was classified by a human (Personal Trainer).
+The objective of this project is to predict weather a Dumbbell Biceps Curl was properly executed. In order to do that, a machine learning algorithm will be used to predict when the exercise  was properly done (*Class A*), or if they made a mistake (*Class B to E*), our Data set consists of the information given by sensors attached to the body and/or dumbbell while the exercise  was done, and it was classified by a human (Personal Trainer). We used a random forest algorithm to build the classificator and we ended up with a robust model with a 0.97 crossvalidation accuracy and a 0.98 out of sample accuracy. 
 
 ### Data manipulation and training
 
@@ -33,17 +33,11 @@ result.train<-training$classe
 result.test<-testing$classe
 ```
 
-The full dataset had `r length(pml.training$classe)` observation, of which `r length (training$classe)` was use to train the model and `r length (testing$classe)` was used to test the model, also we have a dataset of `r length(pml.testing[,1])` to which we don't know the answer to, which will be used later for further tests.
+The full dataset had `r length(pml.training$classe)` observation, of which `r length (training$classe)` were used to train the model and `r length (testing$classe)` were used to test the model, also we have a dataset of `r length(pml.testing[,1])` to which we don't know the answer to, which will be used later for further tests.
 
-We start with `r length(training[,-160])`, but we remove timestamps and we also preprocess the data by removing the near zero variable ones, and also remove all the columns with more than 50% NA. *I will keep the username as a variable, but I will transform it into a dummy variable.* 
+We start with `r length(training[,-160])` variables, but we remove timestamps and we also preprocess the data by removing the near zero variable ones, and also remove all the columns with more than 50% NA.
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
-#dummies<-dummyVars(classe~user_name,data=training)
-#dummy.var.training<-predict(dummies, newdata=training)
-#dummy.var.testing<-predict(dummies,newdata=testing)
-#dummy.var.quiz<-predict(dummies, newdata=pml.testing)
-
-#remove variables with near zero variability
 
 nsv<-nearZeroVar(training[,-160], saveMetrics=TRUE)
 predictors.train<-training[,-160]
@@ -61,13 +55,6 @@ pml.testing <- pml.testing[,-1]
 predictors.train<-predictors.train[,-(1:4)]
 predictors.test<-predictors.test[,-(1:4)]
 pml.testing <- pml.testing[,-(1:4)]
-#dummies<-dummyVars(classe~user_name,data=training)
-#dummy.var.training<-predict(dummies, newdata=training)
-#dummy.var.testing<-predict(dummies,newdata=testing)
-#dummy.var.quiz<-predict(dummies, newdata=pml.testing)
-#predictors.train<-cbind(predictors.train,dummy.var.training)
-#predictors.test<-cbind(predictors.test,dummy.var.testing)
-#pml.testing<-cbind(pml.testing, dummy.var.quiz)
 
 #remove the columns with more than 50% of NA
 predictors.train<-predictors.train[,colSums(is.na(predictors.train))<nrow(predictors.train)*0.5]
@@ -78,25 +65,11 @@ training<-cbind(result.train, predictors.train)
 testing<-cbind(result.test, predictors.test)
 ```
 
-The number of variables ends up being `r length(predictors.train)`.
+The number of variables ends up being `r length(predictors.train)`. We used `r length(training[,1])` cases to train and crossvalidate the data using bootstraping, and `r length(testing[,1])` to estimate out of sample error.
 
-Lets explore the Variables
+# Model
 
-
-```{r, cache=TRUE, echo=FALSE}
-pairs(training[,2:12],pch = 21, bg = c(1:5)[unclass(training[,1])])
-pairs(training[,13:23],pch = 21, bg = c(1:5)[unclass(training[,1])])
-pairs(training[,24:34],pch = 21, bg = c(1:5)[unclass(training[,1])])
-summary(training)
-```
-
-```{r, cache=TRUE, echo=FALSE}
-pairs(training[,1:40],pch = 21, bg = c(1:5)[unclass(training[,1])])
-```
-
-# model
-
-now lets build the model
+A Random Forest model was build, using `r length(predictors.train)` variables. The crossvalidation calculated accuracy is 0.9686, a Kappa value of 0.9603, and an error rate of 2.14. Below we see more details about the model as well as the confusion matrix. In figure 1 we see the variability of the accuracy within the resampling of the training dataset. Also in figure 2 we can see the importance for calssification of the 20 most important variables
 
 ```{r,echo=FALSE,cache=TRUE}
 colnames(training)[1] <- "classe"
@@ -105,23 +78,24 @@ modelFit<-train(classe ~.,data=training)
 ```
 
 
-Then lets check the model
-
-```{r}
+```{r, echo=FALSE}
 modelFit
-modelFit$finalModel
+
 ```
 
-```{r}
+### Out of sample error calculation
+
+In the out of sample error calculation, an accuracy of 0.98 was calculated (95% interval between 0.9777 to 0.982).
+We also can see that in the out of sample classification  that the accuracy for each class is very high with a range from 0.9719 for class B to 0.9961 for class A.
+
+```{r, echo=FALSE}
 colnames(testing)[1] <- "classe"
 predictions <- predict(modelFit,newdata=testing)
 confusionMatrix(predictions, testing[,1])
 ```
 
-```{r}
+```{r, echo=FALSE}
 predictions.final <- predict(modelFit,newdata=pml.testing)
-predictions.final
-length(predictions.final)
 
 pml_write_files = function(x){
   n = length(x)
@@ -131,4 +105,14 @@ pml_write_files = function(x){
   }
 }
 pml_write_files(predictions.final)
+```
+
+With all these we can say that we have built a powerful predictor to tell wether a bicep curl has been done in a proper way, which could be succesfully implemented in weight training.
+
+# APPENDIX (FIGURES)
+
+```{r, echo=FALSE}
+densityplot(modelFit, metric= "Accuracy",sub="Resampled performance estimates", main="Figure 1")
+imp<-varImp(modelFit)
+plot(imp, main="Figure 2")
 ```
